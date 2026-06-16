@@ -3,8 +3,10 @@ import React, { useState, useEffect, useRef } from "react";
 /* ---- palette: indigo/navy + gold, matching the program theme ---- */
 const BG     = "#2e2c6e";   // deep indigo
 const BG2    = "#252358";   // darker panel
-const POS    = "#fbbf24";   // gold = yes / strong
-const NEG    = "#7c83c8";   // muted periwinkle = no / negative
+const POS    = "#fbbf24";   // gold = positive weight / signal on
+const NEG    = "#f4766e";   // coral = negative weight / counts for NO
+const ZERO   = "#6b70b0";   // muted = zero weight
+const OFF    = "#2a2862";   // input switched off (hollow/dark)
 const GOLD   = "#fbbf24";
 const INK    = "#1c1a47";
 const TEXT   = "#e8e9f5";
@@ -173,6 +175,13 @@ function NeuronStage({ stageKey, factors, values, weights, bias, sum, fires, set
   const coreX = 300, coreY = 215, coreR = 60;
   const inTip = [{ x: 70, y: 100 }, { x: 70, y: 215 }, { x: 70, y: 330 }];
   const outX = 532;
+  const biasX = coreX, biasY = 84;            // bias enters the core from above
+  const wBadge = (i) => ({ x: 196, y: coreY + (i - 1) * 62 });  // weight badge column
+
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const bumpWeight = (i, d) => {
+    const nw = [...weights]; nw[i] = clamp(nw[i] + d, -W_RANGE, W_RANGE); setWeights(nw);
+  };
 
   const focus = {
     inputs:  "translate(110px,0) scale(1.16)",
@@ -201,9 +210,11 @@ function NeuronStage({ stageKey, factors, values, weights, bias, sum, fires, set
           const w = weights[i];
           const on = values[i] === 1;
           const live = on && w !== 0;
-          const col = w === 0 ? "#5d63a8" : w > 0 ? POS : NEG;
+          const wcol = w === 0 ? ZERO : w > 0 ? POS : NEG;   // weight (line) sign colour
           const thick = stageKey === "inputs" ? 4.5 : 2 + Math.abs(w) * 1.6;
           const dim = (stageKey === "sum" || stageKey === "output") ? 0.45 : 1;
+          const showLabel = stageKey === "inputs" || stageKey === "test";
+          const b = wBadge(i);
           // straight line from the input node to the neuron's left edge
           const x1 = t.x + 16, y1 = t.y;
           const ang = Math.atan2(coreY - y1, coreX - x1);
@@ -212,7 +223,8 @@ function NeuronStage({ stageKey, factors, values, weights, bias, sum, fires, set
           const path = `M ${x1} ${y1} L ${x2} ${y2}`;
           return (
             <g key={i} opacity={dim}>
-              <path d={path} fill="none" stroke={live ? col : "#3b3982"}
+              {/* the connection carries the WEIGHT's sign colour */}
+              <path d={path} fill="none" stroke={live ? wcol : "#3b3982"}
                 strokeWidth={thick} strokeLinecap="round" opacity={live ? 0.9 : 0.5} />
               {live && (
                 <path className="travel" d={path} fill="none" stroke="#fff"
@@ -223,35 +235,83 @@ function NeuronStage({ stageKey, factors, values, weights, bias, sum, fires, set
                   if (!inputsLive) return;
                   const v = [...values]; v[i] = v[i] ? 0 : 1; setValues(v);
                 }}>
-                {on && <circle cx={t.x} cy={t.y} r={24} fill={col}
+                {/* the input node shows the SIGNAL: on = gold (positive), off = dark */}
+                {on && <circle cx={t.x} cy={t.y} r={24} fill={POS}
                   opacity={0.28} filter="url(#soft)" />}
                 <circle cx={t.x} cy={t.y} r={16}
-                  fill={on ? col : "#2a2862"}
+                  fill={on ? POS : OFF}
                   stroke={on ? "#fff" : "#4d52a0"} strokeWidth={2} />
                 <text x={t.x} y={t.y + 5} textAnchor="middle" fontSize={14}
                   fontWeight={700} fill={on ? INK : MUTE}
                   style={{ fontFamily: "Poppins, sans-serif" }}>{values[i]}</text>
-                {/* labelled inputs on the test stage */}
-                {stageKey === "test" && (
+                {showLabel && (
                   <text x={t.x} y={t.y + 32} textAnchor="middle" fontSize={9.5}
                     fontWeight={600} fill={on ? TEXT : MUTE}
                     style={{ fontFamily: "Poppins, sans-serif" }}>
                     {factors[i].length > 22 ? factors[i].slice(0, 21) + "\u2026" : factors[i]}
                   </text>
                 )}
+                {/* explicit ON/OFF toggle pill so it's clearly clickable */}
+                {stageKey === "inputs" && (
+                  <g transform={`translate(${t.x - 22},${t.y + 40})`}>
+                    <rect width={44} height={17} rx={8.5}
+                      fill={on ? "rgba(251,191,36,.16)" : "rgba(255,255,255,.06)"}
+                      stroke={on ? POS : "#4d52a0"} strokeWidth={1} />
+                    <circle cx={on ? 35 : 9} cy={8.5} r={5.5} fill={on ? POS : "#7a7fbf"} />
+                    <text x={on ? 14 : 27} y={12} textAnchor="middle" fontSize={8}
+                      fontWeight={700} fill={on ? POS : MUTE}
+                      style={{ fontFamily: "Poppins, sans-serif", letterSpacing: 0.5 }}>
+                      {on ? "ON" : "OFF"}</text>
+                  </g>
+                )}
               </g>
+              {/* weight badge sits on the wire; its colour shows the weight's sign */}
               {(stageKey === "weights" || stageKey === "inputs") && (
-                <g transform={`translate(${coreX - 84},${coreY + (i - 1) * 48})`}
-                  opacity={stageKey === "weights" ? 1 : 0.5}>
-                  <circle r={16} fill={w === 0 ? "#5d63a8" : col} />
-                  <text y={4} textAnchor="middle" fontSize={12} fontWeight={700}
+                <g opacity={stageKey === "weights" ? 1 : 0.5}>
+                  <circle cx={b.x} cy={b.y} r={16} fill={wcol} />
+                  <text x={b.x} y={b.y + 4} textAnchor="middle" fontSize={12} fontWeight={700}
                     fill={w > 0 ? INK : "#fff"} style={{ fontFamily: "Poppins, sans-serif" }}>
                     {w > 0 ? `+${w}` : w}</text>
+                  {/* up / down steppers beside the badge \u2014 adjust the weight on the diagram */}
+                  {stageKey === "weights" && (
+                    <>
+                      <Stepper x={b.x + 26} y={b.y - 12} dir="up"
+                        disabled={w >= W_RANGE} onClick={() => bumpWeight(i, +1)} />
+                      <Stepper x={b.x + 26} y={b.y + 12} dir="down"
+                        disabled={w <= -W_RANGE} onClick={() => bumpWeight(i, -1)} />
+                    </>
+                  )}
                 </g>
               )}
             </g>
           );
         })}
+
+        {/* bias enters the core from above, like another input feeding the sum */}
+        {(stageKey === "sum" || stageKey === "output" || stageKey === "test") && (() => {
+          const bcol = bias === 0 ? ZERO : bias > 0 ? POS : NEG;
+          const live = bias !== 0;
+          const thick = 2 + Math.abs(bias) * 1.6;
+          const path = `M ${biasX} ${biasY + 18} L ${coreX} ${coreY - coreR}`;
+          return (
+            <g opacity={stageKey === "sum" ? 1 : 0.5}>
+              <path d={path} fill="none" stroke={live ? bcol : "#3b3982"}
+                strokeWidth={thick} strokeLinecap="round" opacity={live ? 0.9 : 0.5} />
+              {live && stageKey === "sum" && (
+                <path className="travel" d={path} fill="none" stroke="#fff"
+                  strokeWidth={Math.max(1.3, thick - 2.6)} strokeLinecap="round" />
+              )}
+              <circle cx={biasX} cy={biasY} r={17} fill={live ? bcol : OFF}
+                stroke={live ? "#fff" : "#4d52a0"} strokeWidth={1.5} />
+              <text x={biasX} y={biasY + 4} textAnchor="middle" fontSize={12} fontWeight={700}
+                fill={bias > 0 ? INK : "#fff"} style={{ fontFamily: "Poppins, sans-serif" }}>
+                {bias > 0 ? `+${bias}` : bias}</text>
+              <text x={biasX} y={biasY - 26} textAnchor="middle" fontSize={9.5}
+                fontWeight={700} fill={MUTE}
+                style={{ fontFamily: "Poppins, sans-serif", letterSpacing: 1 }}>BIAS</text>
+            </g>
+          );
+        })()}
 
         {fires && <circle cx={coreX} cy={coreY} r={coreR + 16}
           fill={GOLD} opacity={0.2} filter="url(#soft)" />}
@@ -339,29 +399,31 @@ function NeuronStage({ stageKey, factors, values, weights, bias, sum, fires, set
                 }} leftLabel="counts for NO" rightLabel="counts for YES" />
               </div>
             ))}
+            <div style={S.cbHead}>EACH INPUT'S EFFECT &mdash; weight &times; input</div>
+            <ContribBars max={W_RANGE}
+              items={factors.map((f, i) => ({ label: f, value: weights[i] * values[i] }))} />
             <p style={S.deckNote}>
-              Drag toward <b style={{ color: GOLD }}>YES</b> or{" "}
-              <b style={{ color: "#b9bdec" }}>NO</b>. The further you go, the
-              more that input matters &mdash; the connection thickens to match.
+              Drag the sliders or tap the <b>+ / &minus;</b> arrows on the diagram.
+              Toward <b style={{ color: GOLD }}>YES</b> the input pushes the
+              neuron to fire; toward <b style={{ color: NEG }}>NO</b> it pushes
+              back. The further from zero, the more that input matters &mdash;
+              the connection thickens to match. Inputs that are switched off
+              contribute nothing, whatever their weight.
             </p>
           </>
         )}
 
         {stageKey === "sum" && (
           <>
-            <div style={S.calcRow}>
-              {factors.map((f, i) => (
-                <React.Fragment key={i}>
-                  <span style={{ ...S.term, opacity: values[i] ? 1 : 0.4 }}>
-                    {weights[i] > 0 ? `+${weights[i]}` : weights[i]} &times; {values[i]}
-                  </span>
-                  <span style={S.plus}>+</span>
-                </React.Fragment>
-              ))}
-              <span style={S.term}>bias {bias > 0 ? `+${bias}` : bias}</span>
-              <span style={S.plus}>=</span>
-              <span style={{ ...S.sumPill, background: fires ? GOLD : "#4d52a0",
-                color: fires ? INK : "#fff" }}>{sum}</span>
+            <div style={S.cbHead}>HOW THE SCORE ADDS UP</div>
+            <ContribBars max={W_RANGE}
+              items={[
+                ...factors.map((f, i) => ({ label: f, value: weights[i] * values[i] })),
+                { label: "Bias", value: Number(bias) },
+              ]} />
+            <div style={S.sumTotal}>
+              <span style={S.sumTotalLabel}>SCORE</span>
+              <span style={{ ...S.sumTotalVal, color: fires ? GOLD : "#c7caec" }}>{sum}</span>
             </div>
             <div style={S.wBlock}>
               <div style={S.wTop}>
@@ -375,8 +437,10 @@ function NeuronStage({ stageKey, factors, values, weights, bias, sum, fires, set
                 leftLabel="less likely to fire" rightLabel="more likely to fire" />
             </div>
             <p style={S.deckNote}>
-              Bias tilts the neuron's decision before any input. High bias is
-              more likely to fire, lower bias is less likely.
+              Bias is its own term in the sum &mdash; it feeds the neuron from
+              above (no input required) and tilts the decision before any input
+              arrives. Higher bias makes the neuron more likely to fire, lower
+              bias less likely.
             </p>
           </>
         )}
@@ -470,7 +534,7 @@ function Slider({ value, onChange, leftLabel, rightLabel, min = -3, max = 3 }) {
   return (
     <div style={S.sliderWrap}>
       <div style={S.sliderEnds}>
-        <span style={{ color: "#b9bdec" }}>{leftLabel}</span>
+        <span style={{ color: NEG }}>{leftLabel}</span>
         <span style={{ color: GOLD }}>{rightLabel}</span>
       </div>
       <div style={S.sliderTrackWrap}>
@@ -479,6 +543,52 @@ function Slider({ value, onChange, leftLabel, rightLabel, min = -3, max = 3 }) {
         <input type="range" min={min} max={max} step={1} value={value}
           onChange={(e) => onChange(+e.target.value)} style={S.sliderInput} />
       </div>
+    </div>
+  );
+}
+
+/* ---------- a small +/- stepper drawn inside the SVG ---------- */
+function Stepper({ x, y, dir, onClick, disabled, r = 11 }) {
+  const t = r * 0.5;
+  const pts = dir === "up"
+    ? `${x - t},${y + t * 0.55} ${x + t},${y + t * 0.55} ${x},${y - t * 0.7}`
+    : `${x - t},${y - t * 0.55} ${x + t},${y - t * 0.55} ${x},${y + t * 0.7}`;
+  return (
+    <g style={{ cursor: disabled ? "default" : "pointer" }} opacity={disabled ? 0.3 : 1}
+      onClick={(e) => { e.stopPropagation(); if (!disabled) onClick(); }}>
+      <circle cx={x} cy={y} r={r} fill="rgba(255,255,255,.1)"
+        stroke="rgba(255,255,255,.22)" strokeWidth={1} />
+      <polygon points={pts} fill="#fff" />
+    </g>
+  );
+}
+
+/* ---------- signed contribution bars (relative effect of each input) ---------- */
+function ContribBars({ items, max }) {
+  return (
+    <div style={S.cbWrap}>
+      {items.map((it, i) => {
+        const frac = Math.max(-1, Math.min(1, it.value / max));
+        const pos = it.value >= 0;
+        const col = it.value === 0 ? ZERO : pos ? POS : NEG;
+        return (
+          <div key={i} style={S.cbRow}>
+            <span style={S.cbLabel} title={it.label}>
+              {it.label.length > 16 ? it.label.slice(0, 15) + "…" : it.label}
+            </span>
+            <div style={S.cbTrack}>
+              <div style={S.cbAxis} />
+              <div style={{ position: "absolute", top: 4, height: 11, borderRadius: 3,
+                background: col, transition: "all .25s ease",
+                ...(pos ? { left: "50%", width: `${frac * 50}%` }
+                        : { right: "50%", width: `${-frac * 50}%` }) }} />
+            </div>
+            <span style={{ ...S.cbVal, color: it.value === 0 ? MUTE : pos ? GOLD : NEG }}>
+              {it.value > 0 ? `+${it.value}` : it.value}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -726,13 +836,26 @@ const S = {
   actTag: { display: "block", fontSize: 10, fontWeight: 700, letterSpacing: 1.4,
     color: GOLD, marginBottom: 7 },
 
-  calcRow: { display: "flex", flexWrap: "wrap", justifyContent: "center",
-    alignItems: "center", gap: 3, marginBottom: 10 },
-  term: { background: "rgba(255,255,255,.07)", borderRadius: 7,
-    padding: "4px 8px", fontSize: 12, fontWeight: 600, color: TEXT },
-  plus: { padding: "0 2px", color: MUTE, fontWeight: 600 },
-  sumPill: { borderRadius: 7, padding: "4px 11px", fontWeight: 700,
-    fontSize: 14 },
+  cbHead: { fontSize: 10.5, fontWeight: 700, letterSpacing: 1.2, color: MUTE,
+    margin: "4px 0 10px" },
+  cbWrap: { display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 },
+  cbRow: { display: "flex", alignItems: "center", gap: 9 },
+  cbLabel: { flex: "0 0 92px", fontSize: 11.5, color: TEXT, fontWeight: 500,
+    textAlign: "right", whiteSpace: "nowrap", overflow: "hidden",
+    textOverflow: "ellipsis" },
+  cbTrack: { position: "relative", flex: 1, height: 19,
+    background: "rgba(255,255,255,.05)", borderRadius: 5 },
+  cbAxis: { position: "absolute", left: "50%", top: 1, bottom: 1, width: 1.5,
+    background: "rgba(255,255,255,.25)", transform: "translateX(-50%)" },
+  cbVal: { flex: "0 0 30px", fontSize: 12.5, fontWeight: 700, textAlign: "left",
+    fontVariantNumeric: "tabular-nums" },
+
+  sumTotal: { display: "flex", alignItems: "center", justifyContent: "space-between",
+    padding: "10px 14px", marginBottom: 4, borderRadius: 11,
+    background: "rgba(0,0,0,.2)", border: "1px solid rgba(255,255,255,.08)" },
+  sumTotalLabel: { fontSize: 10.5, fontWeight: 700, letterSpacing: 1.4, color: MUTE },
+  sumTotalVal: { fontSize: 26, fontWeight: 700, fontVariantNumeric: "tabular-nums",
+    lineHeight: 1 },
 
   gaugeTrack: { position: "relative", height: 18, borderRadius: 99,
     background: "rgba(255,255,255,.08)", overflow: "hidden", marginTop: 6 },
