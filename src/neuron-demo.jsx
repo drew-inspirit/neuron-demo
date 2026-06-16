@@ -483,14 +483,14 @@ function NeuronStage({ stageKey, factors, values, weights, bias, sum, fires, dec
               <span style={S.actTag}>ACTIVATION FUNCTION</span>
               <div style={S.actBody}>
                 <div>
-                  An <b style={{ color: GOLD }}>activation function</b> turns the
-                  score into the output. Here it's a <b>step</b>: fire above the
-                  threshold, stay silent below.
+                  An <b style={{ color: GOLD }}>activation function</b> turns a
+                  neuron's raw input sum into the signal it passes to the next
+                  layer, determining how strongly it responds.
                   <br /><br />
-                  Real networks mostly use <b>ReLU</b>: it keeps positive scores
-                  and zeroes out negatives. It's fast and, unlike a flat step, it
-                  has a slope to learn from, which is what lets deep networks
-                  actually train.
+                  Modern neural networks usually use <b>ReLU</b>, which passes
+                  positive values through and sets negative values to 0. This
+                  preserves signal strength and helps the network learn during
+                  training.
                 </div>
                 <ReluGlyph />
               </div>
