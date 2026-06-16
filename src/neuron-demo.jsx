@@ -13,9 +13,9 @@ const TEXT   = "#e8e9f5";
 const MUTE   = "#a5a8d4";
 
 const STARTERS = {
-  party: { label: "Go to the party?", inputs: ["Friends are going", "Homework is done", "It's far away"] },
-  food:  { label: "Order takeout?",   inputs: ["I'm hungry", "Fridge is empty", "It's expensive"] },
-  study: { label: "Study tonight?",   inputs: ["Test is tomorrow", "I feel prepared", "I'm exhausted"] },
+  party: { label: "Go to the party?", inputs: ["Friends are going", "Homework is done", "It's far away"],   weights: [2, 1, -2] },
+  food:  { label: "Order takeout?",   inputs: ["I'm hungry", "Fridge is empty", "It's expensive"],          weights: [2, 1, -2] },
+  study: { label: "Study tonight?",   inputs: ["Test is tomorrow", "I feel prepared", "I'm exhausted"],      weights: [2, -2, -1] },
 };
 
 const STAGES = [
@@ -39,9 +39,14 @@ export default function NeuronJourney() {
   const [values, setValues] = useState([1, 0, 1]);
   const [weights, setWeights] = useState([2, 1, -2]);
   const [bias, setBias] = useState(0);
+  const [starterKey, setStarterKey] = useState("party");
 
-  const loadStarter = (k) => { setDecision(STARTERS[k].label); setFactors([...STARTERS[k].inputs]); };
-  const begin = () => { setValues([1,1,1]); setWeights([1,1,1]); setBias(0); setStage(0); setPhase("play"); };
+  const loadStarter = (k) => { setStarterKey(k); setDecision(STARTERS[k].label); setFactors([...STARTERS[k].inputs]); };
+  const begin = () => {
+    // a starter brings sensible default weights; a custom decision starts neutral
+    const w = (starterKey && STARTERS[starterKey].weights) || [1, 1, 1];
+    setValues([1,1,1]); setWeights([...w]); setBias(0); setStage(0); setPhase("play");
+  };
 
   if (phase === "setup") {
     const ready = decision.trim() && factors.every((f) => f.trim());
@@ -60,7 +65,7 @@ export default function NeuronJourney() {
 
           <div style={S.glassCard}>
             <div style={S.cardLabel}>THE DECISION</div>
-            <input value={decision} onChange={(e) => setDecision(e.target.value)}
+            <input value={decision} onChange={(e) => { setStarterKey(null); setDecision(e.target.value); }}
               placeholder="A real yes/no choice you make..." style={S.input} />
             <div style={S.starterRow}>
               <span style={S.starterHint}>or start from</span>
@@ -71,11 +76,12 @@ export default function NeuronJourney() {
           </div>
 
           <div style={S.glassCard}>
-            <div style={S.cardLabel}>THREE INPUTS &mdash; THE FACTORS THAT MATTER</div>
+            <div style={S.cardLabel}>THREE INPUTS: THE FACTORS THAT MATTER</div>
             {factors.map((f, i) => (
               <div key={i} style={S.factorRow}>
                 <span style={S.factorNum}>{i + 1}</span>
                 <input value={f} onChange={(e) => {
+                  setStarterKey(null);
                   const n = [...factors]; n[i] = e.target.value; setFactors(n);
                 }} placeholder={`Input ${i + 1}`} style={S.input} />
               </div>
@@ -131,7 +137,7 @@ export default function NeuronJourney() {
 
         <NeuronStage
           stageKey={stageKey} factors={factors} values={values} weights={weights}
-          bias={bias} sum={sum} fires={fires}
+          bias={bias} sum={sum} fires={fires} decision={decision}
           setValues={setValues} setWeights={setWeights} setBias={setBias}
         />
 
@@ -156,7 +162,7 @@ export default function NeuronJourney() {
             <div style={S.cardLabel}>THE BIG PICTURE</div>
             <p style={S.reflectText}>
               You set these weights by hand. In a real neural network, weights
-              aren't set &mdash; they're <b style={{ color: GOLD }}>learned
+              aren't set, they're <b style={{ color: GOLD }}>learned
               through training</b>, adjusting little by little toward better
               predictions. Stack <b>thousands</b> of these neurons in layers,
               where each one's output feeds the next, and the network can
@@ -170,7 +176,9 @@ export default function NeuronJourney() {
 }
 
 /* ---------- the neuron diagram ---------- */
-function NeuronStage({ stageKey, factors, values, weights, bias, sum, fires, setValues, setWeights, setBias }) {
+function NeuronStage({ stageKey, factors, values, weights, bias, sum, fires, decision, setValues, setWeights, setBias }) {
+  // turn the yes/no question into the action it commits to, e.g. "Study tonight"
+  const action = (decision || "").replace(/\?+\s*$/, "").trim().toLowerCase() || "fire";
   const W = 560, H = 430;
   const coreX = 300, coreY = 215, coreR = 60;
   const inTip = [{ x: 70, y: 100 }, { x: 70, y: 215 }, { x: 70, y: 330 }];
@@ -213,7 +221,7 @@ function NeuronStage({ stageKey, factors, values, weights, bias, sum, fires, set
           const wcol = w === 0 ? ZERO : w > 0 ? POS : NEG;   // weight (line) sign colour
           const thick = stageKey === "inputs" ? 4.5 : 2 + Math.abs(w) * 1.6;
           const dim = (stageKey === "sum" || stageKey === "output") ? 0.45 : 1;
-          const showLabel = stageKey === "inputs" || stageKey === "test";
+          const showLabel = stageKey === "inputs" || stageKey === "test" || stageKey === "weights";
           const b = wBadge(i);
           // straight line from the input node to the neuron's left edge
           const x1 = t.x + 16, y1 = t.y;
@@ -272,7 +280,7 @@ function NeuronStage({ stageKey, factors, values, weights, bias, sum, fires, set
                   <text x={b.x} y={b.y + 4} textAnchor="middle" fontSize={12} fontWeight={700}
                     fill={w > 0 ? INK : "#fff"} style={{ fontFamily: "Poppins, sans-serif" }}>
                     {w > 0 ? `+${w}` : w}</text>
-                  {/* up / down steppers beside the badge \u2014 adjust the weight on the diagram */}
+                  {/* up / down steppers beside the badge, adjust the weight on the diagram */}
                   {stageKey === "weights" && (
                     <>
                       <Stepper x={b.x + 26} y={b.y - 12} dir="up"
@@ -355,7 +363,7 @@ function NeuronStage({ stageKey, factors, values, weights, bias, sum, fires, set
               {fires ? (
                 <circle cx={outX} cy={coreY} r={outR} fill={GOLD} />
               ) : (
-                /* below threshold: hollow, dark — no signal gets through */
+                /* below threshold: hollow, dark, no signal gets through */
                 <circle cx={outX} cy={coreY} r={outR} fill="none"
                   stroke="#4d52a0" strokeWidth={2} strokeDasharray="3 3" />
               )}
@@ -399,14 +407,14 @@ function NeuronStage({ stageKey, factors, values, weights, bias, sum, fires, set
                 }} leftLabel="counts for NO" rightLabel="counts for YES" />
               </div>
             ))}
-            <div style={S.cbHead}>EACH INPUT'S EFFECT &mdash; weight &times; input</div>
+            <div style={S.cbHead}>EACH INPUT'S EFFECT (weight &times; input)</div>
             <ContribBars max={W_RANGE}
               items={factors.map((f, i) => ({ label: f, value: weights[i] * values[i] }))} />
             <p style={S.deckNote}>
               Drag the sliders or tap the <b>+ / &minus;</b> arrows on the diagram.
               Toward <b style={{ color: GOLD }}>YES</b> the input pushes the
               neuron to fire; toward <b style={{ color: NEG }}>NO</b> it pushes
-              back. The further from zero, the more that input matters &mdash;
+              back. The further from zero, the more that input matters, and
               the connection thickens to match. Inputs that are switched off
               contribute nothing, whatever their weight.
             </p>
@@ -427,20 +435,20 @@ function NeuronStage({ stageKey, factors, values, weights, bias, sum, fires, set
             </div>
             <div style={S.wBlock}>
               <div style={S.wTop}>
-                <span style={S.wName}>Bias &mdash; the neuron's starting lean</span>
+                <span style={S.wName}>Bias: the starting lean</span>
                 <span style={{ ...S.wVal,
                   color: bias === 0 ? MUTE : bias > 0 ? GOLD : NEG }}>
                   {bias > 0 ? `+${bias}` : bias}
                 </span>
               </div>
               <Slider value={bias} min={-B_RANGE} max={B_RANGE} onChange={setBias}
-                leftLabel="less likely to fire" rightLabel="more likely to fire" />
+                leftLabel={`less likely to ${action}`} rightLabel={`more likely to ${action}`} />
             </div>
             <p style={S.deckNote}>
-              Bias is its own term in the sum &mdash; it feeds the neuron from
-              above (no input required) and tilts the decision before any input
-              arrives. Higher bias makes the neuron more likely to fire, lower
-              bias less likely.
+              Bias is its own term in the sum. It feeds the neuron from above
+              (no input required) and sets how likely it is to fire before any
+              input arrives. Here, higher bias means more likely to{" "}
+              <b style={{ color: GOLD }}>{action}</b> no matter what the inputs say.
             </p>
           </>
         )}
@@ -463,22 +471,29 @@ function NeuronStage({ stageKey, factors, values, weights, bias, sum, fires, set
               color: fires ? GOLD : "#c7caec",
               borderColor: fires ? "rgba(251,191,36,.4)" : "rgba(124,131,200,.35)" }}>
               {fires
-                ? `Score ${sum} clears the threshold \u2014 the neuron fires YES`
-                : `Score ${sum} is below the threshold \u2014 the neuron stays at NO`}
+                ? `Score ${sum} clears the threshold, so the neuron fires YES`
+                : `Score ${sum} is below the threshold, so the neuron stays at NO`}
             </div>
             <p style={S.deckNote}>
               The higher the score, the more strongly the neuron fires and the
-              stronger the signal it passes on &mdash; watch the output grow.
-              At or below the threshold, no signal passes through at all.
+              stronger the signal it passes on. At or below the threshold, no
+              signal passes through at all.
             </p>
             <div style={S.actNote}>
               <span style={S.actTag}>ACTIVATION FUNCTION</span>
-              The neuron doesn't pass the raw score straight on &mdash; it runs
-              it through an <b style={{ color: GOLD }}>activation function</b>.
-              Here that's a <b>step function</b>: clear the threshold and it
-              fires (1), otherwise it stays silent (0). Real networks swap in
-              smooth activations like <b>sigmoid</b> or <b>ReLU</b>, so the
-              output can be shades in between rather than a hard yes/no.
+              <div style={S.actBody}>
+                <div>
+                  An <b style={{ color: GOLD }}>activation function</b> turns the
+                  score into the output. Here it's a <b>step</b>: fire above the
+                  threshold, stay silent below.
+                  <br /><br />
+                  Real networks mostly use <b>ReLU</b>: it keeps positive scores
+                  and zeroes out negatives. It's fast and, unlike a flat step, it
+                  has a slope to learn from, which is what lets deep networks
+                  actually train.
+                </div>
+                <ReluGlyph />
+              </div>
             </div>
           </>
         )}
@@ -486,7 +501,7 @@ function NeuronStage({ stageKey, factors, values, weights, bias, sum, fires, set
         {stageKey === "test" && (
           <>
             <p style={{ ...S.deckNote, marginTop: 0, marginBottom: 10 }}>
-              Tap an input on or off &mdash; watch the score and output shift.
+              Tap an input on or off and watch the score and output shift.
             </p>
             {factors.map((f, i) => (
               <button key={i} onClick={() => {
@@ -519,7 +534,7 @@ function NeuronStage({ stageKey, factors, values, weights, bias, sum, fires, set
             <p style={S.deckNote}>
               {fires
                 ? `The neuron fires YES, and a score of ${sum} means it passes on a fairly ${sum >= MAX_SCORE * 0.4 ? "strong" : "modest"} signal.`
-                : `The score is ${sum} \u2014 below the threshold, so the neuron stays at NO and passes on nothing.`}
+                : `The score is ${sum}, below the threshold, so the neuron stays at NO and passes on nothing.`}
             </p>
           </>
         )}
@@ -590,6 +605,26 @@ function ContribBars({ items, max }) {
         );
       })}
     </div>
+  );
+}
+
+/* ---------- a tiny ReLU plot ---------- */
+function ReluGlyph() {
+  return (
+    <svg viewBox="0 0 120 84" style={S.reluSvg}>
+      {/* axes */}
+      <line x1="46" y1="8" x2="46" y2="70" stroke="rgba(255,255,255,.22)" strokeWidth="1" />
+      <line x1="10" y1="60" x2="114" y2="60" stroke="rgba(255,255,255,.22)" strokeWidth="1" />
+      {/* relu: flat at 0 for negative scores, then rises */}
+      <polyline points="12,60 46,60 106,14" fill="none" stroke={GOLD}
+        strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      <text x="108" y="74" textAnchor="end" fontSize="7.5" fill={MUTE}
+        style={{ fontFamily: "Poppins, sans-serif" }}>score</text>
+      <text x="50" y="14" fontSize="7.5" fill={MUTE}
+        style={{ fontFamily: "Poppins, sans-serif" }}>output</text>
+      <text x="78" y="82" textAnchor="middle" fontSize="8.5" fontWeight="700" fill={GOLD}
+        style={{ fontFamily: "Poppins, sans-serif" }}>ReLU</text>
+    </svg>
   );
 }
 
@@ -835,6 +870,8 @@ const S = {
     border: "1px solid rgba(251,191,36,.22)" },
   actTag: { display: "block", fontSize: 10, fontWeight: 700, letterSpacing: 1.4,
     color: GOLD, marginBottom: 7 },
+  actBody: { display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" },
+  reluSvg: { width: 116, flexShrink: 0, margin: "0 auto" },
 
   cbHead: { fontSize: 10.5, fontWeight: 700, letterSpacing: 1.2, color: MUTE,
     margin: "4px 0 10px" },
