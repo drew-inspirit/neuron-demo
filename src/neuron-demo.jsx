@@ -20,9 +20,14 @@ const STAGES = [
   { key: "inputs",  name: "Inputs",  blurb: "Each factor is either on or off. Tap to switch them." },
   { key: "weights", name: "Weights", blurb: "Each weight decides how much its input counts." },
   { key: "sum",     name: "Sum",     blurb: "Every weighted input adds up into a single score." },
-  { key: "output",  name: "Output",  blurb: "The higher the score, the more strongly the neuron fires." },
+  { key: "output",  name: "Output",  blurb: "An activation function turns the score into the neuron's firing." },
   { key: "test",    name: "Test it", blurb: "Toggle any input and watch the score and output react." },
 ];
+
+/* ---- neuron config ---- */
+const W_RANGE = 5;                          // weights run from -5 … +5
+const B_RANGE = 3;                          // bias runs from -3 … +3
+const MAX_SCORE = 3 * W_RANGE + B_RANGE;    // largest possible |score|
 
 export default function NeuronJourney() {
   const [phase, setPhase] = useState("setup");
@@ -197,7 +202,7 @@ function NeuronStage({ stageKey, factors, values, weights, bias, sum, fires, set
           const on = values[i] === 1;
           const live = on && w !== 0;
           const col = w === 0 ? "#5d63a8" : w > 0 ? POS : NEG;
-          const thick = stageKey === "inputs" ? 4.5 : 2 + Math.abs(w) * 2.3;
+          const thick = stageKey === "inputs" ? 4.5 : 2 + Math.abs(w) * 1.6;
           const dim = (stageKey === "sum" || stageKey === "output") ? 0.45 : 1;
           // straight line from the input node to the neuron's left edge
           const x1 = t.x + 16, y1 = t.y;
@@ -329,7 +334,7 @@ function NeuronStage({ stageKey, factors, values, weights, bias, sum, fires, set
                     {weights[i] > 0 ? `+${weights[i]}` : weights[i]}
                   </span>
                 </div>
-                <Slider value={weights[i]} onChange={(v) => {
+                <Slider value={weights[i]} min={-W_RANGE} max={W_RANGE} onChange={(v) => {
                   const w = [...weights]; w[i] = v; setWeights(w);
                 }} leftLabel="counts for NO" rightLabel="counts for YES" />
               </div>
@@ -366,7 +371,7 @@ function NeuronStage({ stageKey, factors, values, weights, bias, sum, fires, set
                   {bias > 0 ? `+${bias}` : bias}
                 </span>
               </div>
-              <Slider value={bias} onChange={setBias}
+              <Slider value={bias} min={-B_RANGE} max={B_RANGE} onChange={setBias}
                 leftLabel="less likely to fire" rightLabel="more likely to fire" />
             </div>
             <p style={S.deckNote}>
@@ -380,7 +385,7 @@ function NeuronStage({ stageKey, factors, values, weights, bias, sum, fires, set
           <>
             <div style={S.gaugeTrack}>
               <div style={{ ...S.gaugeFill,
-                width: `${Math.max(0, Math.min(100, ((sum + 12) / 24) * 100))}%`,
+                width: `${Math.max(0, Math.min(100, ((sum + MAX_SCORE) / (2 * MAX_SCORE)) * 100))}%`,
                 background: fires ? GOLD : "#4d52a0" }} />
               <div style={S.gaugeMid} />
             </div>
@@ -402,6 +407,15 @@ function NeuronStage({ stageKey, factors, values, weights, bias, sum, fires, set
               stronger the signal it passes on &mdash; watch the output grow.
               At or below the threshold, no signal passes through at all.
             </p>
+            <div style={S.actNote}>
+              <span style={S.actTag}>ACTIVATION FUNCTION</span>
+              The neuron doesn't pass the raw score straight on &mdash; it runs
+              it through an <b style={{ color: GOLD }}>activation function</b>.
+              Here that's a <b>step function</b>: clear the threshold and it
+              fires (1), otherwise it stays silent (0). Real networks swap in
+              smooth activations like <b>sigmoid</b> or <b>ReLU</b>, so the
+              output can be shades in between rather than a hard yes/no.
+            </div>
           </>
         )}
 
@@ -440,7 +454,7 @@ function NeuronStage({ stageKey, factors, values, weights, bias, sum, fires, set
             </div>
             <p style={S.deckNote}>
               {fires
-                ? `The neuron fires YES, and a score of ${sum} means it passes on a fairly ${sum >= 5 ? "strong" : "modest"} signal.`
+                ? `The neuron fires YES, and a score of ${sum} means it passes on a fairly ${sum >= MAX_SCORE * 0.4 ? "strong" : "modest"} signal.`
                 : `The score is ${sum} \u2014 below the threshold, so the neuron stays at NO and passes on nothing.`}
             </p>
           </>
@@ -451,8 +465,8 @@ function NeuronStage({ stageKey, factors, values, weights, bias, sum, fires, set
 }
 
 /* ---------- smooth slider ---------- */
-function Slider({ value, onChange, leftLabel, rightLabel }) {
-  const pct = ((value + 3) / 6) * 100;
+function Slider({ value, onChange, leftLabel, rightLabel, min = -3, max = 3 }) {
+  const pct = ((value - min) / (max - min)) * 100;
   return (
     <div style={S.sliderWrap}>
       <div style={S.sliderEnds}>
@@ -462,7 +476,7 @@ function Slider({ value, onChange, leftLabel, rightLabel }) {
       <div style={S.sliderTrackWrap}>
         <div style={S.sliderGrad} />
         <div style={{ ...S.sliderThumb, left: `${pct}%` }} />
-        <input type="range" min={-3} max={3} step={1} value={value}
+        <input type="range" min={min} max={max} step={1} value={value}
           onChange={(e) => onChange(+e.target.value)} style={S.sliderInput} />
       </div>
     </div>
@@ -704,6 +718,13 @@ const S = {
 
   deckNote: { fontSize: 12, color: MUTE, lineHeight: 1.6,
     margin: "10px 0 0", fontWeight: 400 },
+
+  actNote: { marginTop: 14, borderRadius: 12, padding: "13px 15px",
+    fontSize: 12.5, lineHeight: 1.6, color: TEXT, fontWeight: 400,
+    background: "rgba(251,191,36,.07)",
+    border: "1px solid rgba(251,191,36,.22)" },
+  actTag: { display: "block", fontSize: 10, fontWeight: 700, letterSpacing: 1.4,
+    color: GOLD, marginBottom: 7 },
 
   calcRow: { display: "flex", flexWrap: "wrap", justifyContent: "center",
     alignItems: "center", gap: 3, marginBottom: 10 },
